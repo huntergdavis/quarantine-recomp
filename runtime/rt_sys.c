@@ -642,6 +642,10 @@ void sys_obj2_call(uint32_t off) {
 
 // ================================================================ host frontend
 static double last_present, last_tick_t;
+// Presents wait for the display's vsync, and they run inside the timer interrupt, so presenting faster
+// than the display refreshes (70 Hz on a 60 Hz screen) stalls the game while its window is visible.
+// Present at most once per display refresh.
+static double present_hz = 70;
 static double t_start;
 static int headless;
 static int frame_count;
@@ -649,6 +653,10 @@ static const char *dump_dir;
 static int max_frames;
 #ifdef USE_SDL
 static SDL_Window *win; static SDL_Renderer *ren; static SDL_Texture *tex;
+static void update_present_hz(void) {
+    const SDL_DisplayMode *m = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(win));
+    present_hz = (m && m->refresh_rate > 1 && m->refresh_rate < 70) ? m->refresh_rate : 70;
+}
 static uint8_t sdl_to_set1(SDL_Scancode s) {
     switch (s) {
     case SDL_SCANCODE_ESCAPE: return 0x01; case SDL_SCANCODE_1: return 0x02; case SDL_SCANCODE_2: return 0x03;
@@ -717,6 +725,7 @@ static void present(void) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) { sys_shutdown(); exit(0); }
+            if (e.type == SDL_EVENT_WINDOW_DISPLAY_CHANGED || e.type == SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED) update_present_hz();
             if (e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) {
                 if (e.key.repeat) continue;
                 if (e.key.scancode == SDL_SCANCODE_F11) {     // F11: toggle fullscreen (not passed to the game)
@@ -763,7 +772,7 @@ void sys_host_tick(void) {
         while (bios_tick_acc >= 1) { WR32(0x46c, RD32(0x46c) + 1); bios_tick_acc -= 1; }
     }
     while (keypos < nkeys && t - t_start >= keyscript[keypos].t) { kb_push(keyscript[keypos].sc); keypos++; }
-    if (t - last_present >= 1.0 / 70) { last_present = t; present(); }
+    if (t - last_present >= 1.0 / present_hz) { last_present = t; present(); }
 }
 
 static void *timer_thread(void *arg) {
@@ -842,6 +851,7 @@ void sys_init(int argc, char **argv) {
         win = SDL_CreateWindow("Quarantine", 1280, 960, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (cfg.fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
         ren = SDL_CreateRenderer(win, NULL);
         SDL_SetRenderVSync(ren, 1);
+        update_present_hz();
         tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
         SDL_PumpEvents();
         const bool *ks = SDL_GetKeyboardState(NULL);
