@@ -690,6 +690,9 @@ static uint8_t sdl_to_set1(SDL_Scancode s) {
 static struct { double t; uint8_t sc; } keyscript[256]; static int nkeys, keypos;
 
 static void present(void) {
+    // Time spent here is host work, not the game's: keep it out of the frame timing kb_hold uses, or a
+    // present right after a page flip makes keys arrive at the top of the menu loop, where they're swallowed.
+    double present_t0 = now_s();
     vga_render();
     if (pad_on) pad_poll();
     frame_count++;
@@ -757,6 +760,7 @@ static void present(void) {
         SDL_RenderPresent(ren);
     }
 #endif
+    if (present_t0 >= flip_end_t) flip_end_t += now_s() - present_t0;
 }
 
 void sys_host_tick(void) {
