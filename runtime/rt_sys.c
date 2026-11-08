@@ -917,6 +917,18 @@ void sys_init(int argc, char **argv) {
         char p[1100]; snprintf(p, sizeof p, "%s/SOUND.DAT", save_dir);
         if (access(p, F_OK) != 0) { FILE *f = fopen(p, "wb"); if (f) { fputc(0x16, f); fputc(0xe0, f); fclose(f); } }
     }
+    // INSTALL.EXE writes CD.DAT ("cd > cd.dat": the CD's current directory) and NORMAL.DAT (the install
+    // directory followed by a space). At startup the game reads each into a buffer and scans for a space,
+    // CR or LF to terminate it, with a 16-bit index. Without the files the buffers stay zeroed, the scan
+    // wraps ~32 KB back into the data segment and zeroes the first 0x20 byte it meets: one of those is
+    // inside the sprite-name table, so PUMTFR1.SPR's slot loaded CRED2.IMG and that vehicle drew as static.
+    {
+        static const struct { const char *name, *text; } inst[] = { {"CD.DAT", "D:\\\r\n"}, {"NORMAL.DAT", "C:\\QUARAN "} };
+        for (int k = 0; k < 2; k++) {
+            char p[1100]; snprintf(p, sizeof p, "%s/%s", save_dir, inst[k].name);
+            if (access(p, F_OK) != 0) { FILE *f = fopen(p, "wb"); if (f) { fputs(inst[k].text, f); fclose(f); } }
+        }
+    }
     snd_init();
     snd_start(headless);
     snd_set_volume(cfg.sfx);
