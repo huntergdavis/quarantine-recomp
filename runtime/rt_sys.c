@@ -593,6 +593,10 @@ static void dpmi(void) {
     case 0x0a00: err(0x8001); return;
     case 0x0e00: SETAX(0x4d); ok(); return;
     case 0x0e01: ok(); return;
+    // The SOS sound library's timer shutdown (non-DPMI branch) issues the Phar Lap call 2508h through
+    // int 31h when the game exits. DOS/4GW rejects it as an unsupported DPMI function and the game exits
+    // normally, so do the same.
+    case 0x2508: LOG("DPMI 2508 (Phar Lap call via int 31h): unsupported\n"); err(0x8001); return;
     }
     rt_fatal("DPMI %04x not implemented", ax);
 }
