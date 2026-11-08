@@ -43,15 +43,24 @@ static inline uint32_t RD32(uint32_t a) {
     if (__builtin_expect(IS_VGA(a), 0)) return RD16(a) | ((uint32_t)RD16(a + 2) << 16);
     uint32_t v; memcpy(&v, MEM + (a & MEM_MASK), 4); return v;
 }
+#ifdef SMC_TRACE
+void rt_smc_note(uint32_t a, uint32_t v, int sz);
+#define SMC_NOTE(a, v, sz) do { if ((uint32_t)((a) - 0x110000u) < 0x60000u) rt_smc_note(a, v, sz); } while (0)
+#else
+#define SMC_NOTE(a, v, sz) ((void)0)
+#endif
 static inline void WR8(uint32_t a, uint32_t v) {
+    SMC_NOTE(a, v, 8);
     if (__builtin_expect(IS_VGA(a), 0)) { vga_write(a, (uint8_t)v); return; }
     MEM[a & MEM_MASK] = (uint8_t)v;
 }
 static inline void WR16(uint32_t a, uint32_t v) {
+    SMC_NOTE(a, v, 16);
     if (__builtin_expect(IS_VGA(a), 0)) { vga_write(a, (uint8_t)v); vga_write(a + 1, (uint8_t)(v >> 8)); return; }
     uint16_t t = (uint16_t)v; memcpy(MEM + (a & MEM_MASK), &t, 2);
 }
 static inline void WR32(uint32_t a, uint32_t v) {
+    SMC_NOTE(a, v, 32);
     if (__builtin_expect(IS_VGA(a), 0)) { WR16(a, v); WR16(a + 2, v >> 16); return; }
     memcpy(MEM + (a & MEM_MASK), &v, 4);
 }

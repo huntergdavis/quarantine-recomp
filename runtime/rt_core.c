@@ -71,6 +71,17 @@ void rt_dump_state(FILE *f) {
 #define TRACE_N 256
 static uint32_t trace_ring[TRACE_N]; static int trace_pos;
 void rt_trace(uint32_t a) { trace_ring[trace_pos++ & (TRACE_N - 1)] = a; }
+#ifdef SMC_TRACE
+// debug: log each distinct code address the game writes to, with the function that was running
+void rt_smc_note(uint32_t a, uint32_t v, int sz) {
+    static uint8_t seen[0x60000];
+    uint32_t o = a - 0x110000u;
+    if (seen[o]) return; seen[o] = 1;
+    uint32_t last = trace_ring[(trace_pos - 1) & (TRACE_N - 1)];
+    int in_region = 0; for (int k = 0; k < NREGIONS; k++) if (a >= REGIONS[k].lo && a < REGIONS[k].hi) in_region = 1;
+    fprintf(stderr, "[smc] write%d %08x (guest %08x) = %08x, last dispatch %08x%s\n", sz, a, a - 0x100000, v, last, in_region ? " [handled region]" : "");
+}
+#endif
 void rt_trace_dump(FILE *f) {
     fprintf(f, "last dispatches:");
     for (int k = 0; k < TRACE_N; k++) {
